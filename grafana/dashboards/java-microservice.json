@@ -1,0 +1,161 @@
+{
+  "title": "Java Microservice Monitoring",
+  "uid": "java-microservice",
+  "tags": ["java", "spring-boot", "jvm", "microservice"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by(instance) (rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "HTTP Error Rate (5xx %)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by(instance) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum by(instance) (rate(http_server_requests_seconds_count[5m])) * 100",
+          "legendFormat": "Error Rate % - {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Response Time P50 / P95 / P99",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by(le, instance) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "P50 - {{instance}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, instance) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "P95 - {{instance}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by(le, instance) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "P99 - {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "JVM Heap Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "Used - {{id}} ({{instance}})"
+        },
+        {
+          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "Max - {{id}} ({{instance}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "JVM Threads",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "Live - {{instance}}"
+        },
+        {
+          "expr": "jvm_threads_daemon_threads",
+          "legendFormat": "Daemon - {{instance}}"
+        },
+        {
+          "expr": "jvm_threads_peak_threads",
+          "legendFormat": "Peak - {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "GC Activity",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 16, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum[5m])",
+          "legendFormat": "GC Pause Time/s - {{cause}} ({{instance}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Active DB Connections",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 16, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "Active - {{pool}} ({{instance}})"
+        },
+        {
+          "expr": "hikaricp_connections_idle",
+          "legendFormat": "Idle - {{pool}} ({{instance}})"
+        },
+        {
+          "expr": "hikaricp_connections_max",
+          "legendFormat": "Max - {{pool}} ({{instance}})"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "HTTP Requests by Status Code",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum by(status, instance) (rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "{{status}} - {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    }
+  ]
+}

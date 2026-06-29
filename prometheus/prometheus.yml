@@ -1,0 +1,73 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  # Attach these labels to all time-series scraped by this Prometheus instance
+  external_labels:
+    monitor: "infra-monitoring"
+    datacenter: "vpc-production"
+
+rule_files:
+  - "alerts.yml"
+
+# ═══════════════════════════════════════════════════════════════
+#  Scrape Jobs
+#
+#  Server inventory (managed via file-based service discovery):
+#    prometheus/targets/node_exporter.yml  → Linux host metrics
+#    prometheus/targets/cadvisor.yml       → Docker container metrics
+#    prometheus/targets/java_services.yml  → Spring Boot apps
+#
+#  To add a new server: edit the relevant .yml file in targets/
+#  Changes are picked up automatically every 30s (no restart needed).
+# ═══════════════════════════════════════════════════════════════
+
+scrape_configs:
+
+  # ── Prometheus itself ──────────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          instance: "10.0.X.A"
+          server_role: "monitoring"
+
+  # ── Linux Host Metrics (node-exporter) ────────────────────────
+  # Each target server must have node-exporter running on port 9100.
+  # Install on remote servers: see README.md → "Remote Server Setup"
+  - job_name: "node-exporter"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets/node_exporter.yml"
+        refresh_interval: 30s   # Re-read file every 30s (add server → takes effect fast)
+    relabel_configs:
+      # Use the "hostname" label from the target file as the instance label
+      - source_labels: [hostname]
+        target_label: instance
+      - source_labels: [__address__]
+        target_label: __address__
+
+  # ── Docker Container Metrics (cAdvisor) ───────────────────────
+  # Each target server must have cAdvisor exposed on port 8090.
+  - job_name: "cadvisor"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets/cadvisor.yml"
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [hostname]
+        target_label: instance
+
+  # ── Java / Spring Boot Microservices ──────────────────────────
+  # Add new Java services in targets/java_services.yml
+  - job_name: "java-microservice"
+    metrics_path: "/actuator/prometheus"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets/java_services.yml"
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [application]
+        target_label: application

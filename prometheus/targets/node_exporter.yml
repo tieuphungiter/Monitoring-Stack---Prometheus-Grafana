@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════════
+#  File-based Service Discovery — node-exporter targets
+#
+#  Prometheus hot-reloads this file every 30s.
+#  To add a server: add a new entry and save. No restart needed.
+#
+#  Prerequisites on each remote server:
+#    Use exporters/docker-compose.yml and run:
+#      docker compose up -d
+# ═══════════════════════════════════════════════════════════════
+
+- targets: ["10.0.X.A:9100"]
+  labels:
+    hostname: "10.0.X.A"
+    server_role: "monitoring"       # This server runs Prometheus + Grafana
+    env: "production"
+
+- targets: ["10.0.X.B:9100"]
+  labels:
+    hostname: "10.0.X.B"
+    server_role: "app"
+    env: "production"
+
+- targets: ["10.0.X.C:9100"]
+  labels:
+    hostname: "10.0.X.C"
+    server_role: "app"
+    env: "production"
+
+- targets: ["10.0.X.D:9100"]
+  labels:
+    hostname: "10.0.X.D"
+    server_role: "app"
+    env: "production"
+
+# ── Thêm server mới ──────────────────────────────────────────
+# Chỉ cần thêm block dưới đây, Prometheus tự reload sau 30s:
+#
+# - targets: ["10.0.X.X:9100"]
+#   labels:
+#     hostname: "10.0.X.X"
+#     server_role: "app"       # hoặc "db", "cache", "worker", v.v.
+#     env: "production"

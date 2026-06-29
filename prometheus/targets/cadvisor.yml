@@ -1,0 +1,38 @@
+# ═══════════════════════════════════════════════════════════════
+#  File-based Service Discovery — cAdvisor targets (port 8090)
+#
+#  Prerequisites on each remote server:
+#    Use exporters/docker-compose.yml and run:
+#      docker compose up -d
+# ═══════════════════════════════════════════════════════════════
+
+- targets: ["10.0.X.A:8090"]
+  labels:
+    hostname: "10.0.X.A"
+    server_role: "monitoring"
+    env: "production"
+
+- targets: ["10.0.X.B:8090"]
+  labels:
+    hostname: "10.0.X.B"
+    server_role: "app"
+    env: "production"
+
+- targets: ["10.0.X.C:8090"]
+  labels:
+    hostname: "10.0.X.C"
+    server_role: "app"
+    env: "production"
+
+- targets: ["10.0.X.D:8090"]
+  labels:
+    hostname: "10.0.X.D"
+    server_role: "app"
+    env: "production"
+
+# ── Thêm server mới ──────────────────────────────────────────
+# - targets: ["10.0.X.X:8090"]
+#   labels:
+#     hostname: "10.0.X.X"
+#     server_role: "app"
+#     env: "production"

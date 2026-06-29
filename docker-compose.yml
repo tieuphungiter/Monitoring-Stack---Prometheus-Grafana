@@ -1,0 +1,127 @@
+version: "3.8"
+
+# ═══════════════════════════════════════════════════════════════
+#  Monitoring Stack — deployed on 10.0.X.A
+#
+#  Topology:
+#    10.0.X.A  ← deploy server (this machine)
+#               ├── Prometheus  :9090  (scrapes all 4 servers)
+#               ├── Grafana     :3000
+#               ├── node-exporter :9100  (monitors 10.0.X.A host)
+#               └── cAdvisor    :8090  (monitors 10.0.X.A containers)
+#
+#    10.0.X.B ← target server (node-exporter + cAdvisor installed separately)
+#    10.0.X.C  ← target server (node-exporter + cAdvisor installed separately)
+#    10.0.X.D ← target server (node-exporter + cAdvisor installed separately)
+#
+#  To add a new server: see prometheus/targets/*.yml  (no restart needed)
+# ═══════════════════════════════════════════════════════════════
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── 1. Node Exporter ──────────────────────────────────────────
+  # Monitors the HOST machine (10.0.X.A) — CPU, RAM, Disk, Network
+  # Uses network_mode: host to read accurate host-level metrics
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    network_mode: host          # Binds directly on 10.0.X.A:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+
+  # ── 2. cAdvisor ───────────────────────────────────────────────
+  # Monitors Docker containers running on 10.0.X.A
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - monitoring
+    ports:
+      - "10.0.X.A:8090:8090"
+    command:
+      - "--port=8090"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+
+  # ── 3. Prometheus ─────────────────────────────────────────────
+  # Central metrics collector — scrapes all 4 servers
+  # Uses file-based service discovery: add servers in prometheus/targets/
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "10.0.X.A:9091:9090"   # Accessible within VPC; block from internet via SG
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Reach 10.0.X.A node-exporter from container
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro   # File-SD directory
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"     # Hot-reload: curl -X POST http://10.0.X.A:9090/-/reload
+
+  # ── 4. Grafana ────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "10.0.X.A:3000:3000"   # Access: http://10.0.X.A:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_SERVER_ROOT_URL=http://10.0.X.A:3000
+      - GF_SMTP_ENABLED=${SES_SMTP_ENABLED:-true}
+      - GF_SMTP_HOST=${SES_SMTP_HOST}
+      - GF_SMTP_USER=${SES_SMTP_USER}
+      - GF_SMTP_PASSWORD=${SES_SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${SES_SMTP_FROM_ADDRESS}
+      - GF_SMTP_FROM_NAME=${SES_SMTP_FROM_NAME:-Grafana Alerts}
+      - GF_SMTP_STARTTLS_POLICY=${SES_SMTP_STARTTLS_POLICY:-MandatoryStartTLS}
+      - GF_SMTP_SKIP_VERIFY=${SES_SMTP_SKIP_VERIFY:-false}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus

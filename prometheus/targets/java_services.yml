@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════════
+#  File-based Service Discovery — Java / Spring Boot services
+#
+#  Mỗi service cần expose /actuator/prometheus.
+#  Thêm dependency vào pom.xml:
+#    <dependency>
+#      <groupId>io.micrometer</groupId>
+#      <artifactId>micrometer-registry-prometheus</artifactId>
+#    </dependency>
+#
+#  application.yml:
+#    management:
+#      endpoints.web.exposure.include: health,prometheus
+#      endpoint.prometheus.enabled: true
+# ═══════════════════════════════════════════════════════════════
+
+# ── Server 10.0.X.B ────────────────────────────────────────
+- targets: ["10.0.X.B:8081"]
+  labels:
+    hostname: "10.0.X.B"
+    application: "java-service"
+    env: "production"
+
+# ── Server 10.0.X.C ─────────────────────────────────────────
+- targets: ["10.0.X.C:8081"]
+  labels:
+    hostname: "10.0.X.C"
+    application: "java-service"
+    env: "production"
+
+# ── Server 10.0.X.D ────────────────────────────────────────
+- targets: ["10.0.X.D:8081"]
+  labels:
+    hostname: "10.0.X.D"
+    application: "java-service"
+    env: "production"
+
+# ── Thêm service mới ─────────────────────────────────────────
+# - targets: ["10.0.X.X:8081"]
+#   labels:
+#     hostname: "10.0.X.X"
+#     application: "order-service"   # tên service cụ thể
+#     env: "production"

@@ -1,0 +1,14 @@
+apiVersion: 1
+
+contactPoints:
+  - name: Teams - Performance Support
+    receivers:
+      - uid: teams-webhook-1
+        type: webhook
+        settings:
+          url: https://cscportal.webhook.office.com/webhookb2/e143650c-7193-4216-afa8-9e90eef4c03a@93f33571-550f-43cf-b09f-cd331338d086/IncomingWebhook/5978b26a668b4b6e823213499a9ca987/38580feb-5527-4f9f-8bef-d6035073a0dc/V2I1kQeygsUEyKzGzSQSgHFqM9xWdg8gnBoH5zJKglJBE1
+          httpMethod: POST
+          maxAlerts: 10
+
+routeTree:
+  receiver: Teams - Performance Support

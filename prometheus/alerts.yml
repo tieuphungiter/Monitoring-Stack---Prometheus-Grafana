@@ -1,0 +1,169 @@
+groups:
+
+  # ─────────────────────────────────────────────
+  #  EC2 / Host Alerts
+  # ─────────────────────────────────────────────
+  - name: host_alerts
+    rules:
+
+      - alert: HostHighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ printf \"%.1f\" $value }}% (threshold: 80%)"
+
+      - alert: HostCriticalCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ printf \"%.1f\" $value }}%"
+
+      - alert: HostHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ printf \"%.1f\" $value }}% (threshold: 85%)"
+
+      - alert: HostDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space available: {{ printf \"%.1f\" $value }}% remaining"
+
+      - alert: HostDiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL disk space on {{ $labels.instance }}"
+          description: "Only {{ printf \"%.1f\" $value }}% disk space remaining!"
+
+      - alert: HostDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host is DOWN: {{ $labels.instance }}"
+          description: "Node exporter unreachable for more than 1 minute"
+
+  # ─────────────────────────────────────────────
+  #  Docker Container Alerts
+  # ─────────────────────────────────────────────
+  - name: container_alerts
+    rules:
+
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name!=""}) or time() - container_last_seen{name!=""} > 60
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container is down: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} has not been seen for over 1 minute"
+
+      - alert: ContainerHighCpuUsage
+        # Fix: container_spec_cpu_quota=-1 when no CPU limit is set → would cause -inf.
+        # Use count(node_cpu_seconds_total) to get number of host CPUs as denominator instead.
+        expr: |
+          (sum by(name) (rate(container_cpu_usage_seconds_total{name!=""}[5m])))
+          / scalar(count(node_cpu_seconds_total{mode="idle"}))
+          * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU in container {{ $labels.name }}"
+          description: "Container CPU usage: {{ printf \"%.1f\" $value }}% of total host CPU"
+
+      - alert: ContainerHighMemoryUsage
+        # Fix: container_spec_memory_limit_bytes=0 when no limit is set → division by zero.
+        # Filter to only containers that have an explicit memory limit configured.
+        expr: |
+          (
+            container_memory_usage_bytes{name!=""}
+            / container_spec_memory_limit_bytes{name!=""}
+          ) * 100 > 85
+          and container_spec_memory_limit_bytes{name!=""} > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory in container {{ $labels.name }}"
+          description: "Container memory usage: {{ printf \"%.1f\" $value }}% of its limit"
+
+  # ─────────────────────────────────────────────
+  #  Java / Spring Boot Alerts
+  # ─────────────────────────────────────────────
+  - name: java_service_alerts
+    rules:
+
+      - alert: JavaServiceDown
+        expr: up{job="java-microservice"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Java service is DOWN: {{ $labels.instance }}"
+          # Fix: Use "DOWN" instead of "down" to avoid confusion with the "up" metric.
+          description: "Java microservice unreachable for more than 1 minute"
+
+      - alert: JavaHighErrorRate
+        expr: |
+          sum by(instance) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / sum by(instance) (rate(http_server_requests_seconds_count[5m]))
+          * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate on {{ $labels.instance }}"
+          description: "Error rate: {{ printf \"%.1f\" $value }}% (threshold: 5%)"
+
+      - alert: JavaSlowResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum by(instance, le) (rate(http_server_requests_seconds_bucket[5m]))) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response time on {{ $labels.instance }}"
+          description: "P95 response time: {{ printf \"%.2f\" $value }}s (threshold: 2s)"
+
+      - alert: JavaHighJvmHeapUsage
+        expr: |
+          (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High JVM heap usage on {{ $labels.instance }}"
+          description: "Heap usage: {{ printf \"%.1f\" $value }}%"
+
+      - alert: JavaHighGcPause
+        # Note: Spring Boot 2.x (Micrometer) uses jvm_gc_pause_seconds_{sum,count}
+        #       Spring Boot 3.x uses the same name — both are covered here.
+        #       If using Spring Boot < 2.5, the metric may be jvm_gc_pause instead.
+        expr: |
+          rate(jvm_gc_pause_seconds_sum[5m])
+          / rate(jvm_gc_pause_seconds_count[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GC pause time on {{ $labels.instance }}"
+          description: "Average GC pause: {{ printf \"%.3f\" $value }}s (cause: {{ $labels.cause }})"
